@@ -3,7 +3,7 @@
 // Récupère les 50 derniers titres et les merge sans doublons
 // ============================================================
 
-import { normalizeApiTrack, type RawApiTrack } from "../db/schema";
+import { normalizeApiTrack, type RawApiTrack } from "../lib/schema";
 import { insertPlays, getConfig, saveConfig } from "../db/indexedDB";
 
 // ============================================================
