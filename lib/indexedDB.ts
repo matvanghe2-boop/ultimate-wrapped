@@ -6,7 +6,6 @@
 
 import Dexie, { type Table } from "dexie";
 import type { PlayEntry, ImportMeta, UserConfig } from "./schema";
-
 // ============================================================
 // DATABASE CLASS
 // ============================================================

@@ -6,10 +6,9 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { insertPlays, saveImportMeta } from "../lib/db/indexedDB";
-import type { PlayEntry } from "../lib/db/schema";
-import type { WorkerOutput } from "../workers/jsonParser.worker";
-
+import { insertPlays, saveImportMeta } from "../../lib/indexedDB";
+import type { PlayEntry } from "../../lib/schema";
+import type { WorkerOutput } from "../../workers/jsonParser.worker";
 // ============================================================
 // TYPES
 // ============================================================
@@ -90,7 +89,7 @@ export function useFileImport() {
 
     // Créer le Web Worker
     const worker = new Worker(
-      new URL("../workers/jsonParser.worker.ts", import.meta.url),
+      new URL("../../workers/jsonParser.worker.ts", import.meta.url),
       { type: "module" }
     );
     workerRef.current = worker;

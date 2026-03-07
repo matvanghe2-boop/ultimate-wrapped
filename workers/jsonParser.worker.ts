@@ -6,15 +6,13 @@
 // bloquer l'interface utilisateur pendant le parsing.
 // ============================================================
 
-import type {
-  RawEndSong,
-  RawStreamingHistory,
-} from "../lib/db/schema";
 import {
   normalizeEndSong,
   normalizeStreamingHistory,
   type PlayEntry,
-} from "../lib/db/schema";
+  type RawEndSong,
+  type RawStreamingHistory,
+} from "../lib/schema";
 
 // ============================================================
 // TYPES DE MESSAGES
