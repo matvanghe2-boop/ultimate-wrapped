@@ -1,24 +1,18 @@
 // ============================================================
 // components/dashboard/Trends.tsx
-// Section : Tendances temporelles — Yearly, Monthly, Hour, Day
-// Ultimate Wrapped — Sprint 2
+// Section : Tendances temporelles — Redesign Sprint 3
 // ============================================================
 
 "use client";
 
 import { useState } from "react";
 import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell,
 } from "recharts";
+import { motion } from "framer-motion";
+import { SectionReveal, AnimatedTabContent } from "../motion/MotionComponents";
 import type { YearStat, MonthStat, HourStat, DayStat } from "../../lib/queries/types";
 
 type TrendTab = "yearly" | "monthly" | "hours" | "days";
@@ -30,19 +24,7 @@ interface TrendsProps {
   byDayOfWeek: DayStat[];
 }
 
-// ============================================================
-// TOOLTIP
-// ============================================================
-
-function HoursTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{ value: number }>;
-  label?: string;
-}) {
+function HoursTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="chart-tooltip">
@@ -52,15 +34,7 @@ function HoursTooltip({
   );
 }
 
-function PlaysTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{ value: number }>;
-  label?: string;
-}) {
+function PlaysTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="chart-tooltip">
@@ -70,13 +44,8 @@ function PlaysTooltip({
   );
 }
 
-// ============================================================
-// GRAPHIQUES
-// ============================================================
-
 function YearlyChart({ data }: { data: YearStat[] }) {
   if (data.length === 0) return <p className="empty-state">Aucune donnée</p>;
-
   const chartData = data.map((y) => ({
     year: String(y.year),
     hours: y.totalHours,
@@ -87,35 +56,33 @@ function YearlyChart({ data }: { data: YearStat[] }) {
   return (
     <div className="chart-wrapper">
       <p className="chart-caption">Heures d&apos;écoute par année</p>
-      <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+      <ResponsiveContainer width="100%" height={260}>
+        <AreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#1DB954" stopOpacity={0.3} />
+              <stop offset="5%"  stopColor="#1DB954" stopOpacity={0.25} />
               <stop offset="95%" stopColor="#1DB954" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-          <XAxis dataKey="year" tick={{ fill: "#aaa", fontSize: 12 }} />
-          <YAxis tick={{ fill: "#aaa", fontSize: 11 }} tickFormatter={(v) => `${v}h`} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+          <XAxis dataKey="year" tick={{ fill: "#6a6a6a", fontSize: 12 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#6a6a6a", fontSize: 11 }} tickFormatter={(v) => `${v}h`} axisLine={false} tickLine={false} />
           <Tooltip content={<HoursTooltip />} />
           <Area
             type="monotone"
             dataKey="hours"
             stroke="#1DB954"
-            strokeWidth={2}
+            strokeWidth={2.5}
             fill="url(#gradGreen)"
+            dot={{ fill: "#1DB954", strokeWidth: 0, r: 4 }}
+            activeDot={{ r: 6, fill: "#1ed760" }}
           />
         </AreaChart>
       </ResponsiveContainer>
 
-      {/* Stats table */}
-      <div className="trend-table">
+      <div className="trend-table" style={{ marginTop: "1.25rem" }}>
         <div className="trend-table__header">
-          <span>Année</span>
-          <span>Heures</span>
-          <span>Écoutes</span>
-          <span>Artistes</span>
+          <span>Année</span><span>Heures</span><span>Écoutes</span><span>Artistes</span>
         </div>
         {data.map((y) => (
           <div key={y.year} className="trend-table__row">
@@ -132,8 +99,6 @@ function YearlyChart({ data }: { data: YearStat[] }) {
 
 function MonthlyChart({ data }: { data: MonthStat[] }) {
   if (data.length === 0) return <p className="empty-state">Aucune donnée</p>;
-
-  // Limiter à 36 derniers mois pour la lisibilité
   const chartData = data.slice(-36).map((m) => ({
     label: m.monthLabel,
     hours: m.totalHours,
@@ -143,19 +108,21 @@ function MonthlyChart({ data }: { data: MonthStat[] }) {
   return (
     <div className="chart-wrapper">
       <p className="chart-caption">Heures d&apos;écoute par mois (36 derniers)</p>
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 32, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+      <ResponsiveContainer width="100%" height={260}>
+        <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 36, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
           <XAxis
             dataKey="label"
-            tick={{ fill: "#aaa", fontSize: 9 }}
+            tick={{ fill: "#6a6a6a", fontSize: 9 }}
             angle={-45}
             textAnchor="end"
             interval={2}
+            axisLine={false}
+            tickLine={false}
           />
-          <YAxis tick={{ fill: "#aaa", fontSize: 11 }} tickFormatter={(v) => `${v}h`} />
-          <Tooltip content={<HoursTooltip />} />
-          <Bar dataKey="hours" fill="#1DB954" radius={[2, 2, 0, 0]} />
+          <YAxis tick={{ fill: "#6a6a6a", fontSize: 11 }} tickFormatter={(v) => `${v}h`} axisLine={false} tickLine={false} />
+          <Tooltip content={<HoursTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+          <Bar dataKey="hours" fill="#1DB954" radius={[3, 3, 0, 0]} maxBarSize={20} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -164,24 +131,23 @@ function MonthlyChart({ data }: { data: MonthStat[] }) {
 
 function HourChart({ data }: { data: HourStat[] }) {
   if (data.length === 0) return <p className="empty-state">Aucune donnée</p>;
-
   const maxPlays = Math.max(...data.map((h) => h.playCount));
 
   return (
     <div className="chart-wrapper">
       <p className="chart-caption">Écoutes par heure de la journée</p>
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-          <XAxis dataKey="label" tick={{ fill: "#aaa", fontSize: 11 }} />
-          <YAxis tick={{ fill: "#aaa", fontSize: 11 }} />
-          <Tooltip content={<PlaysTooltip />} />
-          <Bar dataKey="playCount" radius={[2, 2, 0, 0]}>
+      <ResponsiveContainer width="100%" height={260}>
+        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+          <XAxis dataKey="label" tick={{ fill: "#6a6a6a", fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#6a6a6a", fontSize: 11 }} axisLine={false} tickLine={false} />
+          <Tooltip content={<PlaysTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+          <Bar dataKey="playCount" radius={[3, 3, 0, 0]} maxBarSize={28}>
             {data.map((entry, index) => {
               const intensity = maxPlays > 0 ? entry.playCount / maxPlays : 0;
               const isNight = entry.hour >= 0 && entry.hour <= 5;
               const color = isNight
-                ? `rgba(147, 51, 234, ${0.3 + intensity * 0.7})`
+                ? `rgba(182, 104, 255, ${0.3 + intensity * 0.7})`
                 : `rgba(29, 185, 84, ${0.3 + intensity * 0.7})`;
               return <Cell key={index} fill={color} />;
             })}
@@ -198,27 +164,21 @@ function HourChart({ data }: { data: HourStat[] }) {
 
 function DayChart({ data }: { data: DayStat[] }) {
   if (data.length === 0) return <p className="empty-state">Aucune donnée</p>;
-
   const maxPlays = Math.max(...data.map((d) => d.playCount));
 
   return (
     <div className="chart-wrapper">
       <p className="chart-caption">Écoutes par jour de la semaine</p>
       <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-          <XAxis dataKey="dayLabel" tick={{ fill: "#ddd", fontSize: 12 }} />
-          <YAxis tick={{ fill: "#aaa", fontSize: 11 }} />
-          <Tooltip content={<PlaysTooltip />} />
-          <Bar dataKey="playCount" radius={[4, 4, 0, 0]}>
+        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+          <XAxis dataKey="dayLabel" tick={{ fill: "#b3b3b3", fontSize: 12 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#6a6a6a", fontSize: 11 }} axisLine={false} tickLine={false} />
+          <Tooltip content={<PlaysTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+          <Bar dataKey="playCount" radius={[5, 5, 0, 0]} maxBarSize={40}>
             {data.map((entry, index) => {
               const intensity = maxPlays > 0 ? entry.playCount / maxPlays : 0;
-              return (
-                <Cell
-                  key={index}
-                  fill={`rgba(29, 185, 84, ${0.2 + intensity * 0.8})`}
-                />
-              );
+              return <Cell key={index} fill={`rgba(29, 185, 84, ${0.2 + intensity * 0.8})`} />;
             })}
           </Bar>
         </BarChart>
@@ -227,16 +187,7 @@ function DayChart({ data }: { data: DayStat[] }) {
   );
 }
 
-// ============================================================
-// COMPOSANT PRINCIPAL
-// ============================================================
-
-export function Trends({
-  yearlyTrends,
-  monthlyTrends,
-  byHour,
-  byDayOfWeek,
-}: TrendsProps) {
+export function Trends({ yearlyTrends, monthlyTrends, byHour, byDayOfWeek }: TrendsProps) {
   const [activeTab, setActiveTab] = useState<TrendTab>("yearly");
 
   const tabs: { key: TrendTab; label: string; icon: string }[] = [
@@ -246,30 +197,39 @@ export function Trends({
     { key: "days",    label: "Par jour",  icon: "📊" },
   ];
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case "yearly":  return <YearlyChart  data={yearlyTrends}  />;
+      case "monthly": return <MonthlyChart data={monthlyTrends} />;
+      case "hours":   return <HourChart    data={byHour}        />;
+      case "days":    return <DayChart     data={byDayOfWeek}   />;
+    }
+  };
+
   return (
-    <section className="dashboard-section" aria-labelledby="trends-title">
-      <h2 id="trends-title" className="section-title">Tendances</h2>
+    <SectionReveal delay={0.15}>
+      <section className="dashboard-section" aria-labelledby="trends-title">
+        <h2 id="trends-title" className="section-title">Tendances</h2>
 
-      <div className="tabs" role="tablist">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            className={`tab-btn ${activeTab === tab.key ? "tab-btn--active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            <span>{tab.icon}</span> {tab.label}
-          </button>
-        ))}
-      </div>
+        <div className="tabs" role="tablist">
+          {tabs.map((tab) => (
+            <motion.button
+              key={tab.key}
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              className={`tab-btn ${activeTab === tab.key ? "tab-btn--active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+              whileTap={{ scale: 0.95 }}
+            >
+              <span>{tab.icon}</span> {tab.label}
+            </motion.button>
+          ))}
+        </div>
 
-      <div className="tab-content" role="tabpanel">
-        {activeTab === "yearly"  && <YearlyChart  data={yearlyTrends}  />}
-        {activeTab === "monthly" && <MonthlyChart data={monthlyTrends} />}
-        {activeTab === "hours"   && <HourChart    data={byHour}        />}
-        {activeTab === "days"    && <DayChart      data={byDayOfWeek}   />}
-      </div>
-    </section>
+        <AnimatedTabContent tabKey={activeTab} className="tab-content">
+          {renderContent()}
+        </AnimatedTabContent>
+      </section>
+    </SectionReveal>
   );
 }
