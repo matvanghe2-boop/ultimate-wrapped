@@ -86,10 +86,10 @@ export function GlobalOverview({ global, behavior, streaks }: GlobalOverviewProp
         </StaggerList>
 
         {(behavior || streaks) && (
+          <div style={{ marginTop: "0.875rem" }}>
           <StaggerList
             className="stats-grid stats-grid--3col"
             delay={0.2}
-            style={{ marginTop: "0.875rem" } as React.CSSProperties}
           >
             {behavior && (
               <>
@@ -142,6 +142,7 @@ export function GlobalOverview({ global, behavior, streaks }: GlobalOverviewProp
               </StaggerItem>
             )}
           </StaggerList>
+          </div>
         )}
       </section>
     </SectionReveal>

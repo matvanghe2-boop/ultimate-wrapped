@@ -8,22 +8,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, useInView, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
+import { motion, useInView, useMotionValue, useSpring, AnimatePresence, type Variants } from "framer-motion";
+
+// Cubic-bezier typé explicitement pour satisfaire Framer Motion strict
+type CubicBezier = [number, number, number, number];
+
+const ease1: CubicBezier = [0.22, 1, 0.36, 1];
+const ease2: CubicBezier = [0.34, 1.56, 0.64, 1];
 
 // ============================================================
 // VARIANTS PARTAGÉS
 // ============================================================
 
-export const fadeUp = {
+export const fadeUp: Variants = {
   hidden: { opacity: 0, y: 24 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.5, ease: ease1 },
   },
 };
 
-export const fadeIn = {
+export const fadeIn: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -31,16 +37,16 @@ export const fadeIn = {
   },
 };
 
-export const scaleIn = {
+export const scaleIn: Variants = {
   hidden: { opacity: 0, scale: 0.92 },
   visible: {
     opacity: 1,
     scale: 1,
-    transition: { duration: 0.4, ease: [0.34, 1.56, 0.64, 1] },
+    transition: { duration: 0.4, ease: ease2 },
   },
 };
 
-export const staggerContainer = {
+export const staggerContainer: Variants = {
   hidden: {},
   visible: {
     transition: {
@@ -50,21 +56,21 @@ export const staggerContainer = {
   },
 };
 
-export const staggerItem = {
+export const staggerItem: Variants = {
   hidden: { opacity: 0, y: 16 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.45, ease: ease1 },
   },
 };
 
-export const slideInRight = {
+export const slideInRight: Variants = {
   hidden: { opacity: 0, x: 32 },
   visible: {
     opacity: 1,
     x: 0,
-    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.45, ease: ease1 },
   },
 };
 
@@ -95,7 +101,7 @@ export function SectionReveal({ children, className, delay = 0 }: SectionRevealP
           y: 0,
           transition: {
             duration: 0.55,
-            ease: [0.22, 1, 0.36, 1],
+            ease: ease1,
             delay,
           },
         },
@@ -285,7 +291,7 @@ export function AnimatedBar({
         animate={isInView ? { scaleX: percent / 100 } : { scaleX: 0 }}
         transition={{
           duration: 0.8,
-          ease: [0.4, 0, 0.2, 1],
+          ease: [0.4, 0, 0.2, 1] as CubicBezier,
           delay,
         }}
       />
@@ -335,7 +341,7 @@ export function AnimatedOverlay({ isOpen, onClose, children }: AnimatedOverlayPr
             initial={{ opacity: 0, scale: 0.92, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 16 }}
-            transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
+            transition={{ duration: 0.3, ease: ease2 }}
             onClick={(e) => e.stopPropagation()}
           >
             {children}
