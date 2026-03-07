@@ -4,7 +4,7 @@
 // ============================================================
 
 import { normalizeApiTrack, type RawApiTrack } from "../lib/schema";
-import { insertPlays, getConfig, saveConfig } from "../db/indexedDB";
+import { insertPlays, getConfig, saveConfig } from "../lib/indexedDB";
 
 // ============================================================
 // TYPES
