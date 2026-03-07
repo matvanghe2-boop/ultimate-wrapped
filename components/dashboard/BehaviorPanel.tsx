@@ -107,7 +107,8 @@ function DiscoveryChart({ data }: { data: DiscoveryYear[] }) {
           <XAxis dataKey="year" tick={{ fill: "#aaa", fontSize: 12 }} />
           <YAxis tick={{ fill: "#aaa", fontSize: 11 }} />
           <Tooltip
-            formatter={(value: number) => [`${value} artistes`, "Nouveaux"]}
+            // ✅ APRÈS
+		formatter={(value) => [`${value ?? 0} artistes`, "Nouveaux"]}
           />
           <Bar dataKey="nouveaux" radius={[4, 4, 0, 0]}>
             {chartData.map((entry, index) => (
