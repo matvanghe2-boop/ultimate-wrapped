@@ -1,6 +1,6 @@
 // ============================================================
-// PAGE : Landing + Upload - Ultimate Wrapped
-// src/app/page.tsx
+// app/page.tsx — Landing Page Ultimate Wrapped
+// Bouton accès direct dashboard ajouté
 // ============================================================
 
 "use client";
@@ -19,7 +19,11 @@ export default function Home() {
             <span className="logo-icon">◉</span>
             <span className="logo-text">Ultimate Wrapped</span>
           </div>
-          <p className="logo-tagline">Votre histoire musicale complète. Pas juste une année.</p>
+
+          {/* Bouton accès direct dashboard */}
+          <a href="/dashboard" className="btn-secondary" style={{ fontSize: "0.85rem", padding: "0.5rem 1.25rem" }}>
+            Mon dashboard →
+          </a>
         </div>
       </header>
 
@@ -33,6 +37,13 @@ export default function Home() {
             Spotify ne vous montre que l&apos;année en cours. Ultimate Wrapped analyse
             <strong> l&apos;intégralité</strong> de votre historique depuis la création de votre compte.
           </p>
+
+          {/* Accès rapide dashboard sans import */}
+          <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.875rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <a href="/dashboard" className="btn-secondary">
+              Accéder au dashboard
+            </a>
+          </div>
         </div>
 
         <div className="upload-section">

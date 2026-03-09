@@ -96,9 +96,14 @@ export async function getGlobalStats(
   const uniqueArtists = new Set(entries.map((e) => e.artistName.toLowerCase())).size;
   const uniqueTracks = new Set(entries.map((e) => e.trackUri)).size;
 
-  const timestamps = entries.map((e) => e.ts);
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
+  // Utiliser reduce au lieu de Math.min/max(...array)
+  // car spread sur 50k+ elements cause un stackoverflow
+  let minTs = Infinity;
+  let maxTs = -Infinity;
+  for (const e of entries) {
+    if (e.ts < minTs) minTs = e.ts;
+    if (e.ts > maxTs) maxTs = e.ts;
+  }
   const firstPlay = new Date(minTs);
   const lastPlay = new Date(maxTs);
   const accountAgeYears =
