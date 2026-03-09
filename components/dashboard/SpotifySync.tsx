@@ -13,7 +13,6 @@ import {
   getRefreshToken,
 } from "../../lib/auth";
 import { syncRecentTracks } from "../../lib/syncRecent";
-import { getDB } from "../../hooks/useDB";
 
 type SyncState = "idle" | "syncing" | "success" | "error";
 type AuthState = "unknown" | "connected" | "disconnected";
@@ -78,8 +77,9 @@ export function SpotifySync({ onSyncComplete }: Props) {
     setSyncState("syncing");
     setErrorMsg("");
     try {
-      const db = getDB();
-      const result = await syncRecentTracks(db);
+      const token = await getValidToken();
+      if (!token) throw new Error("Token invalide, reconnectez-vous");
+      const result = await syncRecentTracks(token);
       setLastSyncedCount(result.inserted);
       setSyncState("success");
       onSyncComplete?.(result.inserted);
