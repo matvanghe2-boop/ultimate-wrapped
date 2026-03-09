@@ -33,7 +33,7 @@ class UltimateWrappedDB extends Dexie {
 // Singleton module-level
 let dbInstance: UltimateWrappedDB | null = null;
 
-function getDBInstance(): UltimateWrappedDB {
+export function getDB(): UltimateWrappedDB {
   if (!dbInstance) {
     dbInstance = new UltimateWrappedDB();
   }
@@ -61,7 +61,7 @@ export function useDB(): UseDBReturn {
 
     async function init() {
       try {
-        const db = getDBInstance();
+        const db = getDB();
         await db.open();
         const count = await db.plays.count();
 
@@ -81,7 +81,7 @@ export function useDB(): UseDBReturn {
   }, []);
 
   return {
-    db: isReady ? getDBInstance() : null,
+    db: isReady ? getDB() : null,
     isReady,
     hasData,
     totalEntries,
