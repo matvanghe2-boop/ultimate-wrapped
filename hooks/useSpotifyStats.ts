@@ -1,7 +1,7 @@
 // ============================================================
 // hooks/useSpotifyStats.ts
-// Hook React principal — orchestre toutes les requêtes stats
-// Ultimate Wrapped — Sprint 2
+// Hook React principal — cache invalidant par empreinte
+// Cache sessionStorage : vit le temps de l'onglet, jamais d'accumulation
 // ============================================================
 
 "use client";
@@ -75,6 +75,7 @@ export interface UseSpotifyStatsReturn {
   periodOptions: typeof PERIOD_OPTIONS;
   refetch: () => Promise<void>;
   hasData: boolean;
+  cacheHit: boolean; // pour debug/affichage optionnel
 }
 
 const EMPTY_STATS: SpotifyStats = {
@@ -95,6 +96,110 @@ const EMPTY_STATS: SpotifyStats = {
 };
 
 // ============================================================
+// CACHE — sessionStorage (vit le temps de l'onglet uniquement)
+// Clé : "uw_cache_{period}_{count}_{lastTs}"
+// Logique : si l'empreinte est identique → cache valide → pas de recalcul
+// Si nouvelles écoutes → empreinte différente → recalcul + nouveau cache
+// ============================================================
+
+const CACHE_PREFIX = "uw_cache_";
+
+interface CacheEntry {
+  fingerprint: string;
+  stats: SpotifyStats;
+  cachedAt: number;
+}
+
+/** Calcule l'empreinte en UNE requête rapide (count + dernière écoute) */
+async function computeFingerprint(db: Dexie, period: PeriodKey): Promise<string> {
+  const table = db.table("plays");
+  const filter = buildDateFilter(period);
+
+  let count: number;
+  let lastTs: number;
+
+  try {
+    if (!filter || (!filter.from && !filter.to)) {
+      count = await table.count();
+      // Récupérer uniquement le dernier ts via l'index
+      const last = await table.orderBy("ts").last();
+      lastTs = last?.ts ?? 0;
+    } else {
+      const query = filter.from && filter.to
+        ? table.where("ts").between(filter.from, filter.to, true, true)
+        : filter.from
+        ? table.where("ts").aboveOrEqual(filter.from)
+        : table.where("ts").belowOrEqual(filter.to!);
+
+      count = await query.count();
+      const entries = await query.sortBy("ts");
+      lastTs = entries[entries.length - 1]?.ts ?? 0;
+    }
+  } catch {
+    count = 0;
+    lastTs = 0;
+  }
+
+  return `${period}_${count}_${lastTs}`;
+}
+
+function readCache(fingerprint: string): SpotifyStats | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_PREFIX + fingerprint);
+    if (!raw) return null;
+    const entry: CacheEntry = JSON.parse(raw);
+
+    // Sécurité : invalider les caches de plus de 30 min quand même
+    const MAX_AGE = 30 * 60 * 1000;
+    if (Date.now() - entry.cachedAt > MAX_AGE) {
+      sessionStorage.removeItem(CACHE_PREFIX + fingerprint);
+      return null;
+    }
+
+    // Reconstruire les objets Date (JSON.parse les sérialise en string)
+    if (entry.stats.global) {
+      entry.stats.global.firstPlay = entry.stats.global.firstPlay
+        ? new Date(entry.stats.global.firstPlay)
+        : null;
+      entry.stats.global.lastPlay = entry.stats.global.lastPlay
+        ? new Date(entry.stats.global.lastPlay)
+        : null;
+    }
+
+    return entry.stats;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(fingerprint: string, stats: SpotifyStats): void {
+  try {
+    // Nettoyer les anciens caches de cette session avant d'en écrire un nouveau
+    // pour éviter l'accumulation si on change souvent de filtre
+    const keysToDelete: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(CACHE_PREFIX)) keysToDelete.push(key);
+    }
+    // Garder max 5 entrées (une par période utilisée dans la session)
+    if (keysToDelete.length >= 5) {
+      keysToDelete.slice(0, keysToDelete.length - 4).forEach(k =>
+        sessionStorage.removeItem(k)
+      );
+    }
+
+    const entry: CacheEntry = {
+      fingerprint,
+      stats,
+      cachedAt: Date.now(),
+    };
+    sessionStorage.setItem(CACHE_PREFIX + fingerprint, JSON.stringify(entry));
+  } catch {
+    // sessionStorage plein ou désactivé → on ignore silencieusement
+  }
+}
+
+// ============================================================
 // HOOK
 // ============================================================
 
@@ -106,21 +211,37 @@ export function useSpotifyStats(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriodState] = useState<PeriodKey>(initialPeriod);
+  const [cacheHit, setCacheHit] = useState(false);
 
-  // Ref pour annuler les requêtes obsolètes si le filtre change pendant le chargement
   const abortRef = useRef(false);
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (forceRefresh = false) => {
     if (!db) return;
 
     abortRef.current = false;
-    setIsLoading(true);
     setError(null);
 
     try {
+      // ── Étape 1 : calculer l'empreinte (ultra-rapide, ~5ms) ──
+      const fingerprint = await computeFingerprint(db, period);
+
+      // ── Étape 2 : vérifier le cache ──
+      if (!forceRefresh) {
+        const cached = readCache(fingerprint);
+        if (cached) {
+          setStats(cached);
+          setCacheHit(true);
+          setIsLoading(false);
+          return; // Affichage instantané
+        }
+      }
+
+      // ── Étape 3 : cache manquant ou invalidé → recalcul complet ──
+      setCacheHit(false);
+      setIsLoading(true);
+
       const filter = buildDateFilter(period);
 
-      // Lancement en parallèle pour maximiser les performances
       const [
         global,
         topArtists,
@@ -149,28 +270,22 @@ export function useSpotifyStats(
         getSkipStats(db, filter),
         getListeningStreaks(db, filter),
         getBehaviorStats(db, filter),
-        getDiscoveryTrends(db),        // Toujours all_time (mesure la découverte historique)
-        getDarkestMonths(db, 5),        // Toujours all_time (comparaison globale)
+        getDiscoveryTrends(db),
+        getDarkestMonths(db, 5),
       ]);
 
-      if (abortRef.current) return; // Le filtre a changé, on abandonne
+      if (abortRef.current) return;
 
-      setStats({
-        global,
-        topArtists,
-        topTracks,
-        topAlbums,
-        mostSkipped,
-        yearlyTrends,
-        monthlyTrends,
-        byHour,
-        byDayOfWeek,
-        skipStats,
-        streaks,
-        behavior,
-        discoveryTrends,
-        darkestMonths,
-      });
+      const newStats: SpotifyStats = {
+        global, topArtists, topTracks, topAlbums, mostSkipped,
+        yearlyTrends, monthlyTrends, byHour, byDayOfWeek,
+        skipStats, streaks, behavior, discoveryTrends, darkestMonths,
+      };
+
+      // ── Étape 4 : stocker en cache pour cette session ──
+      writeCache(fingerprint, newStats);
+
+      setStats(newStats);
     } catch (err) {
       if (!abortRef.current) {
         setError(
@@ -186,16 +301,13 @@ export function useSpotifyStats(
     }
   }, [db, period]);
 
-  // Recharge quand la DB ou la période change
   useEffect(() => {
     fetchAll();
-    return () => {
-      abortRef.current = true;
-    };
+    return () => { abortRef.current = true; };
   }, [fetchAll]);
 
   const setPeriod = useCallback((key: PeriodKey) => {
-    abortRef.current = true; // Annule la requête en cours
+    abortRef.current = true;
     setPeriodState(key);
   }, []);
 
@@ -207,7 +319,8 @@ export function useSpotifyStats(
     setPeriod,
     currentFilter: buildDateFilter(period),
     periodOptions: PERIOD_OPTIONS,
-    refetch: fetchAll,
+    refetch: () => fetchAll(true), // forceRefresh = true ignore le cache
     hasData: stats.global !== null && stats.global.totalPlays > 0,
+    cacheHit,
   };
 }

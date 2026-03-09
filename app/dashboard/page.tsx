@@ -5,10 +5,11 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDB } from "../../hooks/useDB";
 import { useSpotifyStats } from "../../hooks/useSpotifyStats";
+import { initBackgroundSync } from "../../lib/serviceWorker";
 import { PeriodFilter } from "../../components/dashboard/PeriodFilter";
 import { GlobalOverview } from "../../components/dashboard/GlobalOverview";
 import { TopLists } from "../../components/dashboard/TopLists";
@@ -204,6 +205,19 @@ export default function DashboardPage() {
 
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isWrappedOpen, setIsWrappedOpen] = useState(false);
+  const [bgSyncToast, setBgSyncToast] = useState<string | null>(null);
+
+  // Initialiser la sync arrière-plan au montage
+  useEffect(() => {
+    initBackgroundSync((result) => {
+      if ((result.inserted ?? 0) > 0) {
+        setBgSyncToast(`↻ ${result.inserted} nouvelle${result.inserted! > 1 ? "s" : ""} écoute${result.inserted! > 1 ? "s" : ""} synchronisée${result.inserted! > 1 ? "s" : ""}`);
+        setTimeout(() => setBgSyncToast(null), 4000);
+        refetch(); // Recharge les stats avec le cache invalidé
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Chargement initial de la DB
   if (!isReady) {
@@ -348,6 +362,35 @@ export default function DashboardPage() {
             refetch();
           }}
         />
+
+        {/* ====== TOAST SYNC ARRIÈRE-PLAN ====== */}
+        <AnimatePresence>
+          {bgSyncToast && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              style={{
+                position: "fixed",
+                bottom: "calc(1.5rem + var(--safe-bottom))",
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "var(--bg-elevated)",
+                border: "1px solid rgba(29,185,84,0.4)",
+                borderRadius: "500px",
+                padding: "0.6rem 1.25rem",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: "var(--sp-green)",
+                zIndex: 300,
+                whiteSpace: "nowrap",
+                boxShadow: "var(--shadow)",
+              }}
+            >
+              {bgSyncToast}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ====== EXPORT MODAL ====== */}
         <WrappedCard

@@ -54,8 +54,10 @@ export interface UserConfig {
   id: "config"; // Singleton
   spotifyUserId?: string;
   spotifyDisplayName?: string;
-  lastApiSync?: number; // Timestamp de la dernière sync Web API
+  lastApiSync?: number;       // Timestamp de la dernière sync Web API
   totalEntriesCount?: number; // Cache du count total
+  spotifyAccessToken?: string; // Token copié en IDB pour accès Service Worker
+  spotifyTokenExpiry?: number; // Expiry du token
 }
 
 // ============================================================

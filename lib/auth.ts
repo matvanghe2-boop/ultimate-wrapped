@@ -1,8 +1,6 @@
 // ============================================================
 // SPOTIFY AUTH : OAuth 2.0 PKCE Flow (100% client-side)
 // Pas de secret exposé, pas de backend nécessaire
-// Fix Sprint 3 : localStorage au lieu de sessionStorage
-// (sessionStorage peut être vidé lors de redirections externes)
 // ============================================================
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID ?? "";
@@ -51,9 +49,9 @@ export async function initiateLogin(): Promise<void> {
   const challenge = await generateCodeChallenge(verifier);
   const state = generateCodeVerifier(32);
 
-  // localStorage persiste lors des redirections externes (contrairement à sessionStorage)
-  localStorage.setItem("spotify_pkce_verifier", verifier);
-  localStorage.setItem("spotify_oauth_state", state);
+  // Stocker pour la callback
+  sessionStorage.setItem("spotify_pkce_verifier", verifier);
+  sessionStorage.setItem("spotify_oauth_state", state);
 
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
@@ -75,12 +73,12 @@ export async function exchangeCode(
   code: string,
   state: string
 ): Promise<TokenResponse> {
-  const expectedState = localStorage.getItem("spotify_oauth_state");
+  const expectedState = sessionStorage.getItem("spotify_oauth_state");
   if (state !== expectedState) {
     throw new Error("State mismatch - possible CSRF attack");
   }
 
-  const verifier = localStorage.getItem("spotify_pkce_verifier");
+  const verifier = sessionStorage.getItem("spotify_pkce_verifier");
   if (!verifier) throw new Error("No PKCE verifier found");
 
   const response = await fetch("https://accounts.spotify.com/api/token", {
@@ -104,9 +102,9 @@ export async function exchangeCode(
   // Stocker les tokens
   saveTokens(tokens);
 
-  // Nettoyer les clés PKCE temporaires
-  localStorage.removeItem("spotify_pkce_verifier");
-  localStorage.removeItem("spotify_oauth_state");
+  // Nettoyer
+  sessionStorage.removeItem("spotify_pkce_verifier");
+  sessionStorage.removeItem("spotify_oauth_state");
 
   return tokens;
 }
@@ -135,7 +133,7 @@ export async function refreshAccessToken(
 }
 
 // ============================================================
-// TOKEN STORAGE
+// TOKEN STORAGE (localStorage)
 // ============================================================
 
 export interface TokenResponse {
@@ -153,11 +151,61 @@ export function saveTokens(tokens: TokenResponse): void {
   if (tokens.refresh_token) {
     localStorage.setItem("spotify_refresh_token", tokens.refresh_token);
   }
+  // Copier le token dans IndexedDB pour que le Service Worker puisse y accéder
+  // (les SW n'ont pas accès au localStorage)
+  saveTokenToIDB(tokens.access_token, expiresAt);
+}
+
+/** Copie le token en IDB config pour le Service Worker */
+function saveTokenToIDB(accessToken: string, expiresAt: number): void {
+  try {
+    const req = indexedDB.open("UltimateWrappedDB", 1);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("config")) return;
+      const tx = db.transaction("config", "readwrite");
+      const store = tx.objectStore("config");
+      const getReq = store.get("main");
+      getReq.onsuccess = () => {
+        const config = getReq.result ?? { id: "main" };
+        config.spotifyAccessToken = accessToken;
+        config.spotifyTokenExpiry = expiresAt;
+        store.put(config);
+      };
+    };
+  } catch {
+    // Silencieux — non bloquant
+  }
+}
+
+/** Efface le token IDB à la déconnexion */
+export function clearTokenFromIDB(): void {
+  try {
+    const req = indexedDB.open("UltimateWrappedDB", 1);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("config")) return;
+      const tx = db.transaction("config", "readwrite");
+      const store = tx.objectStore("config");
+      const getReq = store.get("main");
+      getReq.onsuccess = () => {
+        const config = getReq.result;
+        if (config) {
+          delete config.spotifyAccessToken;
+          delete config.spotifyTokenExpiry;
+          store.put(config);
+        }
+      };
+    };
+  } catch {
+    // Silencieux
+  }
 }
 
 export function getStoredToken(): string | null {
   const token = localStorage.getItem("spotify_access_token");
   const expiresAt = Number(localStorage.getItem("spotify_expires_at") ?? 0);
+
   if (!token || Date.now() >= expiresAt - 60_000) return null;
   return token;
 }
