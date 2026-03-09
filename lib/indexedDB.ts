@@ -53,7 +53,7 @@ export async function insertPlays(
 
   if (entries.length === 0) return { inserted: 0, duplicates: 0 };
 
-  // Vérifie quels IDs existent déjà
+  // Compter les entrées existantes AVANT l'upsert
   const ids = entries.map((e) => e.id);
   const existingIds = new Set(
     await db.plays
@@ -62,11 +62,12 @@ export async function insertPlays(
       .primaryKeys()
   );
 
+  const duplicates = existingIds.size;
   const newEntries = entries.filter((e) => !existingIds.has(e.id));
-  const duplicates = entries.length - newEntries.length;
 
+  // bulkPut = insert + update silencieux — ne plante jamais sur les doublons
   if (newEntries.length > 0) {
-    await db.plays.bulkAdd(newEntries);
+    await db.plays.bulkPut(newEntries);
   }
 
   return { inserted: newEntries.length, duplicates };
