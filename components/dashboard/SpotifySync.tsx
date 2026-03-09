@@ -1,162 +1,202 @@
+"use client";
 // ============================================================
 // components/dashboard/SpotifySync.tsx
-// Bouton connexion Spotify + sync temps réel — Sprint 3
+// Connexion Spotify persistante — auto-reconnexion au refresh
 // ============================================================
 
-"use client";
-
-import { useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { initiateLogin, getValidToken, clearTokens, getStoredToken } from "../../lib/auth";
-import { syncRecentTracks, shouldSync } from "../../lib/syncRecent";
+import {
+  initiateLogin,
+  getValidToken,
+  clearTokens,
+  getRefreshToken,
+} from "../../lib/auth";
+import { syncRecentTracks } from "../../lib/syncRecent";
+import { getDB } from "../../hooks/useDB";
 
-interface SpotifySyncProps {
+type SyncState = "idle" | "syncing" | "success" | "error";
+type AuthState = "unknown" | "connected" | "disconnected";
+
+interface Props {
   onSyncComplete?: (inserted: number) => void;
 }
 
-type SyncStatus = "idle" | "syncing" | "done" | "error";
+export function SpotifySync({ onSyncComplete }: Props) {
+  const [authState, setAuthState] = useState<AuthState>("unknown");
+  const [displayName, setDisplayName] = useState<string>("");
+  const [syncState, setSyncState] = useState<SyncState>("idle");
+  const [lastSyncedCount, setLastSyncedCount] = useState<number>(0);
+  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [showMenu, setShowMenu] = useState(false);
 
-export function SpotifySync({ onSyncComplete }: SpotifySyncProps) {
-  const [isConnected, setIsConnected] = useState(false);
-  const [displayName, setDisplayName] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
-  const [lastSyncMessage, setLastSyncMessage] = useState<string | null>(null);
-
-  // Vérifier si un token valide est présent au montage
-  useEffect(() => {
-    const token = getStoredToken();
-    setIsConnected(!!token);
-
-    // Récupérer le nom depuis localStorage si stocké
-    const name = localStorage.getItem("spotify_display_name");
-    if (name) setDisplayName(name);
+  // ── Vérification au montage (et à chaque focus de page) ──
+  const checkAuth = useCallback(async () => {
+    const token = await getValidToken();
+    if (token) {
+      setAuthState("connected");
+      // Récupérer le nom stocké ou le rafraîchir
+      const stored = localStorage.getItem("spotify_display_name");
+      if (stored) {
+        setDisplayName(stored);
+      } else {
+        try {
+          const res = await fetch("https://api.spotify.com/v1/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const profile = await res.json();
+            const name = profile.display_name || profile.id || "";
+            setDisplayName(name);
+            localStorage.setItem("spotify_display_name", name);
+          }
+        } catch { /* silencieux */ }
+      }
+    } else if (getRefreshToken()) {
+      // Refresh token présent mais access token expiré → tenter refresh auto
+      const refreshed = await getValidToken();
+      if (refreshed) {
+        setAuthState("connected");
+      } else {
+        setAuthState("disconnected");
+      }
+    } else {
+      setAuthState("disconnected");
+    }
   }, []);
 
-  const handleConnect = async () => {
-    try {
-      await initiateLogin();
-    } catch (err) {
-      console.error("[SpotifySync] Login error:", err);
-    }
-  };
+  useEffect(() => {
+    checkAuth();
+    // Re-vérifier quand l'onglet reprend le focus (ex: retour depuis Spotify)
+    const onFocus = () => checkAuth();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [checkAuth]);
 
+  // ── Sync ──
   const handleSync = async () => {
-    setSyncStatus("syncing");
-    setLastSyncMessage(null);
-
+    setSyncState("syncing");
+    setErrorMsg("");
     try {
-      const token = await getValidToken();
-      if (!token) {
-        setIsConnected(false);
-        setSyncStatus("error");
-        setLastSyncMessage("Session expirée. Reconnectez-vous.");
-        return;
-      }
-
-      const result = await syncRecentTracks(token);
-      setSyncStatus("done");
-      setLastSyncMessage(
-        result.inserted > 0
-          ? `+${result.inserted} nouvelles écoutes synchronisées`
-          : "Déjà à jour"
-      );
+      const db = getDB();
+      const result = await syncRecentTracks(db);
+      setLastSyncedCount(result.inserted);
+      setSyncState("success");
       onSyncComplete?.(result.inserted);
-
-      // Reset du message après 4s
-      setTimeout(() => {
-        setSyncStatus("idle");
-        setLastSyncMessage(null);
-      }, 4000);
+      setTimeout(() => setSyncState("idle"), 3000);
     } catch (err) {
-      setSyncStatus("error");
-      setLastSyncMessage("Erreur lors de la synchronisation");
-      setTimeout(() => setSyncStatus("idle"), 3000);
+      setSyncState("error");
+      setErrorMsg(err instanceof Error ? err.message : "Erreur de sync");
+      setTimeout(() => setSyncState("idle"), 4000);
     }
   };
 
+  // ── Déconnexion ──
   const handleDisconnect = () => {
     clearTokens();
     localStorage.removeItem("spotify_display_name");
-    setIsConnected(false);
-    setDisplayName(null);
-    setSyncStatus("idle");
-    setLastSyncMessage(null);
+    setAuthState("disconnected");
+    setDisplayName("");
+    setShowMenu(false);
   };
 
-  // ======== RENDU ========
+  // ── Connexion ──
+  const handleLogin = () => initiateLogin();
 
-  if (!isConnected) {
+  // ── Rendu ──
+
+  // Chargement initial
+  if (authState === "unknown") {
+    return (
+      <div className="spotify-sync spotify-sync--loading">
+        <div className="loading-spinner loading-spinner--sm" />
+      </div>
+    );
+  }
+
+  // Non connecté
+  if (authState === "disconnected") {
     return (
       <motion.button
-        className="spotify-sync-btn"
-        onClick={handleConnect}
-        whileTap={{ scale: 0.95 }}
-        title="Connecter Spotify pour synchroniser vos écoutes récentes"
+        className="spotify-sync__connect-btn"
+        onClick={handleLogin}
+        whileTap={{ scale: 0.96 }}
+        title="Connecter Spotify"
       >
-        <span>♫</span> Connecter Spotify
+        <span className="spotify-sync__icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+          </svg>
+        </span>
+        Connecter Spotify
       </motion.button>
     );
   }
 
+  // Connecté
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
-      {/* Badge utilisateur connecté */}
-      {displayName && (
-        <div className="spotify-user-badge" title="Compte Spotify connecté">
-          <span className="spotify-user-badge__dot" />
-          <span>{displayName}</span>
-        </div>
-      )}
-
-      {/* Message de statut */}
-      <AnimatePresence>
-        {lastSyncMessage && (
-          <motion.span
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0 }}
-            style={{
-              fontSize: "0.75rem",
-              color: syncStatus === "error" ? "#f15e6c" : "#1DB954",
-              fontWeight: 600,
-            }}
-          >
-            {lastSyncMessage}
-          </motion.span>
-        )}
-      </AnimatePresence>
-
-      {/* Bouton sync */}
+    <div className="spotify-sync" style={{ position: "relative" }}>
+      {/* Bouton principal — affiche le menu */}
       <motion.button
-        className="spotify-sync-btn spotify-sync-btn--ghost"
-        onClick={handleSync}
-        disabled={syncStatus === "syncing"}
-        whileTap={{ scale: 0.95 }}
-        title="Synchroniser les 50 dernières écoutes"
+        className="spotify-sync__user-btn"
+        onClick={() => setShowMenu((v) => !v)}
+        whileTap={{ scale: 0.96 }}
       >
-        <motion.span
-          animate={syncStatus === "syncing" ? { rotate: 360 } : { rotate: 0 }}
-          transition={
-            syncStatus === "syncing"
-              ? { duration: 1, repeat: Infinity, ease: "linear" }
-              : { duration: 0 }
-          }
-          style={{ display: "inline-block" }}
-        >
-          ↻
-        </motion.span>
-        {syncStatus === "syncing" ? "Sync..." : "Sync"}
+        <span className="spotify-sync__dot" />
+        <span className="spotify-sync__name">
+          {displayName || "Spotify"}
+        </span>
+        <span style={{ fontSize: "0.65rem", opacity: 0.5 }}>▾</span>
       </motion.button>
 
-      {/* Bouton déconnexion discret */}
-      <button
-        className="btn-icon"
-        onClick={handleDisconnect}
-        title="Déconnecter Spotify"
-        style={{ fontSize: "0.75rem" }}
-      >
-        ✕
-      </button>
+      {/* Menu déroulant */}
+      <AnimatePresence>
+        {showMenu && (
+          <>
+            {/* Overlay pour fermer */}
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 90 }}
+              onClick={() => setShowMenu(false)}
+            />
+            <motion.div
+              className="spotify-sync__menu"
+              initial={{ opacity: 0, y: -8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+            >
+              {/* Sync */}
+              <button
+                className="spotify-sync__menu-item"
+                onClick={() => { handleSync(); setShowMenu(false); }}
+                disabled={syncState === "syncing"}
+              >
+                {syncState === "syncing" ? (
+                  <><div className="loading-spinner loading-spinner--sm" /> Synchronisation...</>
+                ) : syncState === "success" ? (
+                  <><span>✓</span> {lastSyncedCount > 0 ? `${lastSyncedCount} nouvelles écoutes` : "Déjà à jour"}</>
+                ) : (
+                  <><span>↻</span> Synchroniser maintenant</>
+                )}
+              </button>
+
+              {syncState === "error" && (
+                <p className="spotify-sync__menu-error">{errorMsg}</p>
+              )}
+
+              <div className="spotify-sync__menu-divider" />
+
+              {/* Déconnexion */}
+              <button
+                className="spotify-sync__menu-item spotify-sync__menu-item--danger"
+                onClick={handleDisconnect}
+              >
+                <span>⏏</span> Déconnecter
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
