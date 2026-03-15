@@ -409,6 +409,48 @@ body {
   cursor: not-allowed;
 }
 
+
+
+
+/* Menu déroulant mobile */
+.period-filter__select-wrapper {
+  display: none;
+  position: relative;
+}
+
+.period-filter__select {
+  appearance: none;
+  background: var(--surface, #1a1a2e);
+  color: var(--text, #fff);
+  border: 1px solid var(--border, #333);
+  border-radius: 20px;
+  padding: 8px 36px 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.period-filter__select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 12px;
+}
+
+/* Sur mobile : dropdown visible, pills cachées */
+@media (max-width: 768px) {
+  .period-filter__select-wrapper {
+    display: flex;
+    align-items: center;
+  }
+
+  .period-filter__options {
+    display: none;
+  }
+}
+
 /* ============================================================
    TABS — scroll horizontal sur mobile
    ============================================================ */
