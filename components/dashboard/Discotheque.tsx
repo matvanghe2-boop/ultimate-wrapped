@@ -62,11 +62,20 @@ export interface PoncedAlbum {
   skipQuality:    number;
   scoreComposite: number;
   retentionDays:  number;
+  firstSeen:      number | null;
+  lastSeen:       number | null;
 }
 
 // ============================================================
 // HELPERS
 // ============================================================
+
+function formatDate(value: number | string | null | undefined): string {
+  if (!value) return "Date inconnue";
+  const dateObj = new Date(value);
+  if (isNaN(dateObj.getTime())) return "Date inconnue";
+  return dateObj.toLocaleDateString("fr-FR");
+}
 
 function stdDev(values: number[]): number {
   if (values.length < 2) return 0;
@@ -138,7 +147,10 @@ async function computePoncedAlbums(
 
     tracks.set(trackKey, (tracks.get(trackKey) ?? 0) + 1);
 
-    if (entry.ts) tsArr.push(entry.ts);
+    if (entry.ts) {
+      const dateObj = new Date(entry.ts);
+      if (!isNaN(dateObj.getTime())) tsArr.push(dateObj.getTime());
+    }
 
     const ms         = entry.msPlayed   ?? 0;
     const dur        = entry.msDuration ?? 0;
@@ -181,9 +193,13 @@ async function computePoncedAlbums(
     // ── 2. RÉTENTION ──
     let retentionDays  = 0;
     let retentionScore = 0;
+    let firstSeen: number | null = null;
+    let lastSeen:  number | null = null;
     if (tsArr.length >= 2) {
       const minTs = Math.min(...tsArr);
       const maxTs = Math.max(...tsArr);
+      firstSeen      = minTs;
+      lastSeen       = maxTs;
       retentionDays  = Math.round((maxTs - minTs) / 86_400_000);
       retentionScore = Math.min(1, retentionDays / RETENTION_MAX_DAYS);
     }
@@ -220,6 +236,8 @@ async function computePoncedAlbums(
       skipQuality,
       scoreComposite,
       retentionDays,
+      firstSeen,
+      lastSeen,
     });
   }
 
@@ -313,7 +331,12 @@ function AlbumCard({ album, rank }: { album: PoncedAlbum; rank: number }) {
           <ScoreBar value={album.cohesionScore} color="#1DB954" delay={0.05} />
         </div>
         <div style={{ marginBottom: "0.4rem" }}>
-          <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>📅 Rétention ({retentionLabel})</span>
+          <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
+            📅 Rétention ({retentionLabel})
+            {album.firstSeen && album.lastSeen && (
+              <> · {formatDate(album.firstSeen)} → {formatDate(album.lastSeen)}</>
+            )}
+          </span>
           <ScoreBar value={album.retentionScore} color="#60a5fa" delay={0.1} />
         </div>
         <div>
