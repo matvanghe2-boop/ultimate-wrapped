@@ -39,6 +39,7 @@ const MIN_COMPLETION      = 0.90;
 const MIN_ENGAGEMENT      = 0.70;
 const MIN_PLAYS_ENGAGED   = 5;
 const MIN_KNOWN_TRACKS    = 3;
+const MIN_HOURS           = 40;
 const RETENTION_MAX_DAYS  = 365;
 const SKIP_THRESHOLD_RATE = 0.80;
 const SKIP_FALLBACK_MS    = 30_000;
@@ -221,6 +222,9 @@ async function computePoncedAlbums(
       retentionScore * 0.40 +
       skipQuality    * 0.25;
 
+    const totalHours = Math.round(meta.totalMs / 3_600_000 * 10) / 10;
+    if (totalHours < MIN_HOURS) continue;
+
     ponced.push({
       albumName,
       artistName:    meta.artistName,
@@ -228,7 +232,7 @@ async function computePoncedAlbums(
       listenedTracks,
       engagedTracks,
       totalPlays:    meta.totalPlays,
-      totalHours:    Math.round(meta.totalMs / 3_600_000 * 10) / 10,
+      totalHours,
       completionRate,
       engagementRate,
       cohesionScore,
@@ -241,10 +245,10 @@ async function computePoncedAlbums(
     });
   }
 
-  // Tri : scoreComposite DESC → totalHours DESC
+  // Tri : totalPlays DESC → totalHours DESC
   ponced.sort((a, b) =>
-    b.scoreComposite - a.scoreComposite ||
-    b.totalHours     - a.totalHours
+    b.totalPlays - a.totalPlays ||
+    b.totalHours - a.totalHours
   );
 
   return ponced;
@@ -408,13 +412,13 @@ export function Discotheque({ db, filter }: { db: Dexie | null; filter: DateFilt
             <p style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>💿</p>
             <p style={{ fontWeight: 600, marginBottom: "0.4rem" }}>Aucun album poncé</p>
             <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", maxWidth: 340, margin: "0 auto" }}>
-              Critères : ≥ 80% des pistes écoutées, ≥ 50% avec ≥ {MIN_PLAYS_ENGAGED} écoutes, minimum {MIN_KNOWN_TRACKS} pistes.
+              Critères : ≥ 80% des pistes écoutées, ≥ 50% avec ≥ {MIN_PLAYS_ENGAGED} écoutes, minimum {MIN_KNOWN_TRACKS} pistes, ≥ {MIN_HOURS}h d&apos;écoute.
             </p>
           </div>
         ) : (
           <>
             <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-              {albums.length} album{albums.length > 1 ? "s" : ""} poncé{albums.length > 1 ? "s" : ""} · score composite puis heures d&apos;écoute
+              {albums.length} album{albums.length > 1 ? "s" : ""} poncé{albums.length > 1 ? "s" : ""} · triés par nombre d&apos;écoutes · ≥ {MIN_HOURS}h
             </p>
             <div style={{
               height: 580, overflowY: "auto",
