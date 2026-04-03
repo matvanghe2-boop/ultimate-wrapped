@@ -1,6 +1,7 @@
 // ============================================================
 // app/dashboard/page.tsx
-// Dashboard — Accès direct + import intégré — Sprint 3
+// Dashboard — Navigation par onglets — Sprint 4
+// Tabs : Tableau de Bord / Palmarès / Discothèque / Insights
 // ============================================================
 
 "use client";
@@ -16,10 +17,17 @@ import { TopLists } from "../../components/dashboard/TopLists";
 import { Trends } from "../../components/dashboard/Trends";
 import { BehaviorPanel } from "../../components/dashboard/BehaviorPanel";
 import { DarkMonths } from "../../components/dashboard/DarkMonths";
+import { Discotheque } from "../../components/dashboard/Discotheque";
 import { SpotifySync } from "../../components/dashboard/SpotifySync";
 import { WrappedCard } from "../../components/dashboard/WrappedCard";
 import { PageTransition } from "../../components/motion/MotionComponents";
 import { FileDropzone } from "../../components/upload/FileDropzone";
+
+// ============================================================
+// TYPES
+// ============================================================
+
+type MainTab = "overview" | "palmares" | "discotheque" | "insights";
 
 // ============================================================
 // ÉTATS UI
@@ -43,7 +51,7 @@ function ErrorState({ message }: { message: string }) {
 }
 
 // ============================================================
-// PANNEAU D'IMPORT (drawer latéral ou modale)
+// PANNEAU D'IMPORT
 // ============================================================
 
 function ImportDrawer({
@@ -59,7 +67,6 @@ function ImportDrawer({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Overlay */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -74,8 +81,6 @@ function ImportDrawer({
               backdropFilter: "blur(4px)",
             }}
           />
-
-          {/* Drawer */}
           <motion.div
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
@@ -97,7 +102,6 @@ function ImportDrawer({
               gap: "1.25rem",
             }}
           >
-            {/* Header drawer */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <h2 style={{
                 fontFamily: "var(--font-display)",
@@ -110,18 +114,17 @@ function ImportDrawer({
               </h2>
               <button className="btn-icon" onClick={onClose}>✕</button>
             </div>
-
             <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
-              Importez vos fichiers <code style={{
+              Importez vos fichiers{" "}
+              <code style={{
                 background: "var(--bg-highlight)",
                 padding: "0.1rem 0.4rem",
                 borderRadius: 4,
                 color: "var(--sp-green)",
                 fontSize: "0.78rem",
-              }}>endsong_X.json</code> depuis votre archive Spotify.
-              Vous pouvez en importer plusieurs à la fois, depuis votre téléphone ou votre ordinateur.
+              }}>endsong_X.json</code>{" "}
+              depuis votre archive Spotify.
             </p>
-
             <FileDropzone
               onImportComplete={() => {
                 onImportComplete();
@@ -136,14 +139,10 @@ function ImportDrawer({
 }
 
 // ============================================================
-// ÉTAT VIDE — dashboard sans données
+// ÉTAT VIDE
 // ============================================================
 
-function EmptyDashboard({
-  onOpenImport,
-}: {
-  onOpenImport: () => void;
-}) {
+function EmptyDashboard({ onOpenImport }: { onOpenImport: () => void }) {
   return (
     <motion.div
       className="empty-dashboard"
@@ -157,13 +156,11 @@ function EmptyDashboard({
         Importez votre archive Spotify pour voir votre historique complet,
         ou connectez votre compte pour synchroniser vos écoutes récentes.
       </p>
-
       <div style={{ display: "flex", gap: "0.875rem", flexWrap: "wrap", justifyContent: "center", marginTop: "0.5rem" }}>
         <button className="btn-primary" onClick={onOpenImport}>
           📂 Importer une archive
         </button>
       </div>
-
       <div style={{
         marginTop: "1.5rem",
         padding: "1.25rem",
@@ -195,6 +192,79 @@ function EmptyDashboard({
 }
 
 // ============================================================
+// NAVIGATION TABS
+// ============================================================
+
+const MAIN_TABS: { key: MainTab; label: string; icon: string }[] = [
+  { key: "overview",     label: "Tableau de Bord", icon: "◉" },
+  { key: "palmares",     label: "Palmarès",         icon: "🏆" },
+  { key: "discotheque",  label: "Discothèque",      icon: "💿" },
+  { key: "insights",     label: "Insights",          icon: "🔍" },
+];
+
+function MainTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: MainTab;
+  onChange: (tab: MainTab) => void;
+}) {
+  return (
+    <nav
+      className="main-tabs"
+      role="tablist"
+      aria-label="Navigation principale"
+      style={{
+        display: "flex",
+        gap: "0.25rem",
+        borderBottom: "1px solid var(--border)",
+        padding: "0 var(--page-px)",
+        overflowX: "auto",
+        scrollbarWidth: "none",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      {MAIN_TABS.map((tab) => {
+        const isActive = activeTab === tab.key;
+        return (
+          <motion.button
+            key={tab.key}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(tab.key)}
+            whileTap={{ scale: 0.96 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.7rem 1rem",
+              background: "none",
+              border: "none",
+              borderBottom: isActive
+                ? "2px solid var(--sp-green)"
+                : "2px solid transparent",
+              color: isActive ? "var(--text-primary)" : "var(--text-muted)",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.82rem",
+              fontWeight: isActive ? 700 : 500,
+              letterSpacing: "0.02em",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              transition: "color 0.15s, border-color 0.15s",
+              marginBottom: "-1px",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: "0.9rem" }}>{tab.icon}</span>
+            <span className="tab-label-text">{tab.label}</span>
+          </motion.button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ============================================================
 // PAGE PRINCIPALE
 // ============================================================
 
@@ -203,23 +273,24 @@ export default function DashboardPage() {
   const { stats, isLoading, error, period, setPeriod, hasData, currentFilter, refetch } =
     useSpotifyStats(db);
 
+  const [activeTab, setActiveTab] = useState<MainTab>("overview");
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isWrappedOpen, setIsWrappedOpen] = useState(false);
   const [bgSyncToast, setBgSyncToast] = useState<string | null>(null);
 
-  // Initialiser la sync arrière-plan au montage
   useEffect(() => {
     initBackgroundSync((result) => {
       if ((result.inserted ?? 0) > 0) {
-        setBgSyncToast(`↻ ${result.inserted} nouvelle${result.inserted! > 1 ? "s" : ""} écoute${result.inserted! > 1 ? "s" : ""} synchronisée${result.inserted! > 1 ? "s" : ""}`);
+        setBgSyncToast(
+          `↻ ${result.inserted} nouvelle${result.inserted! > 1 ? "s" : ""} écoute${result.inserted! > 1 ? "s" : ""} synchronisée${result.inserted! > 1 ? "s" : ""}`
+        );
         setTimeout(() => setBgSyncToast(null), 4000);
-        refetch(); // Recharge les stats avec le cache invalidé
+        refetch();
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Chargement initial de la DB
   if (!isReady) {
     return (
       <main className="dashboard-layout">
@@ -227,6 +298,60 @@ export default function DashboardPage() {
       </main>
     );
   }
+
+  // ── Rendu du contenu selon l'onglet actif ──
+  const renderTabContent = () => {
+    if (!hasData) return null;
+
+    switch (activeTab) {
+      case "overview":
+        return (
+          <>
+            {stats.global && (
+              <GlobalOverview
+                global={stats.global}
+                behavior={stats.behavior}
+                streaks={stats.streaks}
+              />
+            )}
+            <Trends
+              yearlyTrends={stats.yearlyTrends}
+              monthlyTrends={stats.monthlyTrends}
+              byHour={stats.byHour}
+              byDayOfWeek={stats.byDayOfWeek}
+            />
+            <DarkMonths data={stats.darkestMonths} />
+          </>
+        );
+
+      case "palmares":
+        return (
+          <TopLists
+            topArtists={stats.topArtists}
+            topTracks={stats.topTracks}
+            topAlbums={stats.topAlbums}
+          />
+        );
+
+      case "discotheque":
+        return (
+          <Discotheque db={db} filter={currentFilter} />
+        );
+
+      case "insights":
+        return (
+          <BehaviorPanel
+            behavior={stats.behavior}
+            skipStats={stats.skipStats}
+            streaks={stats.streaks}
+            discoveryTrends={stats.discoveryTrends}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <PageTransition>
@@ -243,7 +368,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="dashboard-header__right">
-            {/* Bouton import — toujours visible */}
             <motion.button
               className="btn-icon"
               onClick={() => setIsImportOpen(true)}
@@ -254,7 +378,6 @@ export default function DashboardPage() {
               📂
             </motion.button>
 
-            {/* Export PNG — visible si données */}
             {hasData && (
               <motion.button
                 className="export-btn"
@@ -265,14 +388,12 @@ export default function DashboardPage() {
               </motion.button>
             )}
 
-            {/* Spotify Sync */}
             <SpotifySync
               onSyncComplete={(inserted) => {
                 if (inserted > 0) refetch();
               }}
             />
 
-            {/* Filtre période — visible si données */}
             {hasData && (
               <PeriodFilter
                 value={period}
@@ -282,6 +403,11 @@ export default function DashboardPage() {
             )}
           </div>
         </header>
+
+        {/* ====== TABS DE NAVIGATION ====== */}
+        {hasData && (
+          <MainTabs activeTab={activeTab} onChange={setActiveTab} />
+        )}
 
         {/* ====== ERREUR ====== */}
         {error && <ErrorState message={error} />}
@@ -302,36 +428,19 @@ export default function DashboardPage() {
             <EmptyDashboard onOpenImport={() => setIsImportOpen(true)} />
           )}
 
-          {/* Données présentes → dashboard complet */}
+          {/* Données → contenu de l'onglet actif */}
           {hasData && (
-            <>
-              {stats.global && (
-                <GlobalOverview
-                  global={stats.global}
-                  behavior={stats.behavior}
-                  streaks={stats.streaks}
-                />
-              )}
-              <TopLists
-                topArtists={stats.topArtists}
-                topTracks={stats.topTracks}
-                topAlbums={stats.topAlbums}
-                mostSkipped={stats.mostSkipped}
-              />
-              <Trends
-                yearlyTrends={stats.yearlyTrends}
-                monthlyTrends={stats.monthlyTrends}
-                byHour={stats.byHour}
-                byDayOfWeek={stats.byDayOfWeek}
-              />
-              <BehaviorPanel
-                behavior={stats.behavior}
-                skipStats={stats.skipStats}
-                streaks={stats.streaks}
-                discoveryTrends={stats.discoveryTrends}
-              />
-              <DarkMonths data={stats.darkestMonths} />
-            </>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+              >
+                {renderTabContent()}
+              </motion.div>
+            </AnimatePresence>
           )}
         </div>
 
@@ -358,12 +467,10 @@ export default function DashboardPage() {
         <ImportDrawer
           isOpen={isImportOpen}
           onClose={() => setIsImportOpen(false)}
-          onImportComplete={() => {
-            refetch();
-          }}
+          onImportComplete={() => refetch()}
         />
 
-        {/* ====== TOAST SYNC ARRIÈRE-PLAN ====== */}
+        {/* ====== TOAST SYNC ====== */}
         <AnimatePresence>
           {bgSyncToast && (
             <motion.div

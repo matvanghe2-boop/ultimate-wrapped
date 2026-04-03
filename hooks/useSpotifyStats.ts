@@ -1,7 +1,7 @@
 // ============================================================
 // hooks/useSpotifyStats.ts
-// Hook React principal — cache invalidant par empreinte
-// Cache sessionStorage : vit le temps de l'onglet, jamais d'accumulation
+// Hook React principal — cache sessionStorage par empreinte hash
+// Sprint 4 : Top 50, suppression mostSkipped + skipStats de l'algo
 // ============================================================
 
 "use client";
@@ -32,7 +32,6 @@ import {
   getTopArtists,
   getTopTracks,
   getTopAlbums,
-  getMostSkippedTracks,
   getYearlyTrends,
   getMonthlyTrends,
   getListeningByHour,
@@ -53,7 +52,6 @@ export interface SpotifyStats {
   topArtists: ArtistStat[];
   topTracks: TrackStat[];
   topAlbums: AlbumStat[];
-  mostSkipped: TrackStat[];
   yearlyTrends: YearStat[];
   monthlyTrends: MonthStat[];
   byHour: HourStat[];
@@ -75,7 +73,7 @@ export interface UseSpotifyStatsReturn {
   periodOptions: typeof PERIOD_OPTIONS;
   refetch: () => Promise<void>;
   hasData: boolean;
-  cacheHit: boolean; // pour debug/affichage optionnel
+  cacheHit: boolean;
 }
 
 const EMPTY_STATS: SpotifyStats = {
@@ -83,7 +81,6 @@ const EMPTY_STATS: SpotifyStats = {
   topArtists: [],
   topTracks: [],
   topAlbums: [],
-  mostSkipped: [],
   yearlyTrends: [],
   monthlyTrends: [],
   byHour: [],
@@ -96,10 +93,7 @@ const EMPTY_STATS: SpotifyStats = {
 };
 
 // ============================================================
-// CACHE — sessionStorage (vit le temps de l'onglet uniquement)
-// Clé : "uw_cache_{period}_{count}_{lastTs}"
-// Logique : si l'empreinte est identique → cache valide → pas de recalcul
-// Si nouvelles écoutes → empreinte différente → recalcul + nouveau cache
+// CACHE sessionStorage — empreinte (period + count + lastTs)
 // ============================================================
 
 const CACHE_PREFIX = "uw_cache_";
@@ -110,7 +104,6 @@ interface CacheEntry {
   cachedAt: number;
 }
 
-/** Calcule l'empreinte en UNE requête rapide (count + dernière écoute) */
 async function computeFingerprint(db: Dexie, period: PeriodKey): Promise<string> {
   const table = db.table("plays");
   const filter = buildDateFilter(period);
@@ -121,7 +114,6 @@ async function computeFingerprint(db: Dexie, period: PeriodKey): Promise<string>
   try {
     if (!filter || (!filter.from && !filter.to)) {
       count = await table.count();
-      // Récupérer uniquement le dernier ts via l'index
       const last = await table.orderBy("ts").last();
       lastTs = last?.ts ?? 0;
     } else {
@@ -149,14 +141,12 @@ function readCache(fingerprint: string): SpotifyStats | null {
     if (!raw) return null;
     const entry: CacheEntry = JSON.parse(raw);
 
-    // Sécurité : invalider les caches de plus de 30 min quand même
     const MAX_AGE = 30 * 60 * 1000;
     if (Date.now() - entry.cachedAt > MAX_AGE) {
       sessionStorage.removeItem(CACHE_PREFIX + fingerprint);
       return null;
     }
 
-    // Reconstruire les objets Date (JSON.parse les sérialise en string)
     if (entry.stats.global) {
       entry.stats.global.firstPlay = entry.stats.global.firstPlay
         ? new Date(entry.stats.global.firstPlay)
@@ -174,28 +164,21 @@ function readCache(fingerprint: string): SpotifyStats | null {
 
 function writeCache(fingerprint: string, stats: SpotifyStats): void {
   try {
-    // Nettoyer les anciens caches de cette session avant d'en écrire un nouveau
-    // pour éviter l'accumulation si on change souvent de filtre
     const keysToDelete: string[] = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
       if (key?.startsWith(CACHE_PREFIX)) keysToDelete.push(key);
     }
-    // Garder max 5 entrées (une par période utilisée dans la session)
     if (keysToDelete.length >= 5) {
       keysToDelete.slice(0, keysToDelete.length - 4).forEach(k =>
         sessionStorage.removeItem(k)
       );
     }
 
-    const entry: CacheEntry = {
-      fingerprint,
-      stats,
-      cachedAt: Date.now(),
-    };
+    const entry: CacheEntry = { fingerprint, stats, cachedAt: Date.now() };
     sessionStorage.setItem(CACHE_PREFIX + fingerprint, JSON.stringify(entry));
   } catch {
-    // sessionStorage plein ou désactivé → on ignore silencieusement
+    // sessionStorage plein → ignore
   }
 }
 
@@ -222,32 +205,29 @@ export function useSpotifyStats(
     setError(null);
 
     try {
-      // ── Étape 1 : calculer l'empreinte (ultra-rapide, ~5ms) ──
       const fingerprint = await computeFingerprint(db, period);
 
-      // ── Étape 2 : vérifier le cache ──
       if (!forceRefresh) {
         const cached = readCache(fingerprint);
         if (cached) {
           setStats(cached);
           setCacheHit(true);
           setIsLoading(false);
-          return; // Affichage instantané
+          return;
         }
       }
 
-      // ── Étape 3 : cache manquant ou invalidé → recalcul complet ──
       setCacheHit(false);
       setIsLoading(true);
 
       const filter = buildDateFilter(period);
 
+      // Top 50 pour artistes, titres et albums
       const [
         global,
         topArtists,
         topTracks,
         topAlbums,
-        mostSkipped,
         yearlyTrends,
         monthlyTrends,
         byHour,
@@ -259,10 +239,9 @@ export function useSpotifyStats(
         darkestMonths,
       ] = await Promise.all([
         getGlobalStats(db, filter),
-        getTopArtists(db, 20, filter),
-        getTopTracks(db, 20, filter),
-        getTopAlbums(db, 20, filter),
-        getMostSkippedTracks(db, 10, filter),
+        getTopArtists(db, 50, filter),
+        getTopTracks(db, 50, filter),
+        getTopAlbums(db, 50, filter),
         getYearlyTrends(db, filter),
         getMonthlyTrends(db, filter),
         getListeningByHour(db, filter),
@@ -277,14 +256,12 @@ export function useSpotifyStats(
       if (abortRef.current) return;
 
       const newStats: SpotifyStats = {
-        global, topArtists, topTracks, topAlbums, mostSkipped,
+        global, topArtists, topTracks, topAlbums,
         yearlyTrends, monthlyTrends, byHour, byDayOfWeek,
         skipStats, streaks, behavior, discoveryTrends, darkestMonths,
       };
 
-      // ── Étape 4 : stocker en cache pour cette session ──
       writeCache(fingerprint, newStats);
-
       setStats(newStats);
     } catch (err) {
       if (!abortRef.current) {
@@ -295,9 +272,7 @@ export function useSpotifyStats(
         );
       }
     } finally {
-      if (!abortRef.current) {
-        setIsLoading(false);
-      }
+      if (!abortRef.current) setIsLoading(false);
     }
   }, [db, period]);
 
@@ -319,7 +294,7 @@ export function useSpotifyStats(
     setPeriod,
     currentFilter: buildDateFilter(period),
     periodOptions: PERIOD_OPTIONS,
-    refetch: () => fetchAll(true), // forceRefresh = true ignore le cache
+    refetch: () => fetchAll(true),
     hasData: stats.global !== null && stats.global.totalPlays > 0,
     cacheHit,
   };

@@ -1,6 +1,6 @@
 // ============================================================
 // components/dashboard/BehaviorPanel.tsx
-// Section : Comportement & Découverte — Redesign Sprint 3
+// Section Insights — Sprint 4 (suppression "Titres abandonnés")
 // ============================================================
 
 "use client";
@@ -29,6 +29,10 @@ function formatDate(d: Date | null): string {
   if (!d) return "—";
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
+
+// ============================================================
+// RADAR PROFIL
+// ============================================================
 
 function ListenerProfileRadar({
   behavior,
@@ -70,6 +74,10 @@ function ListenerProfileRadar({
   );
 }
 
+// ============================================================
+// GRAPHIQUE DÉCOUVERTE
+// ============================================================
+
 function DiscoveryChart({ data }: { data: DiscoveryYear[] }) {
   if (data.length === 0) return <p className="empty-state">Aucune donnée</p>;
 
@@ -87,9 +95,7 @@ function DiscoveryChart({ data }: { data: DiscoveryYear[] }) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
           <XAxis dataKey="year" tick={{ fill: "#6a6a6a", fontSize: 12 }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fill: "#6a6a6a", fontSize: 11 }} axisLine={false} tickLine={false} />
-          <Tooltip
-            formatter={(value) => [`${value ?? 0} artistes`, "Nouveaux"]}
-          />
+          <Tooltip formatter={(value) => [`${value ?? 0} artistes`, "Nouveaux"]} />
           <Bar dataKey="nouveaux" radius={[5, 5, 0, 0]} maxBarSize={32}>
             {chartData.map((entry, index) => (
               <Cell
@@ -122,39 +128,34 @@ function DiscoveryChart({ data }: { data: DiscoveryYear[] }) {
   );
 }
 
+// ============================================================
+// EXPORT
+// ============================================================
+
 export function BehaviorPanel({ behavior, skipStats, streaks, discoveryTrends }: BehaviorPanelProps) {
   return (
     <SectionReveal delay={0.2}>
       <section className="dashboard-section" aria-labelledby="behavior-title">
-        <h2 id="behavior-title" className="section-title">Comportement &amp; Découverte</h2>
+        <h2 id="behavior-title" className="section-title">Insights comportementaux</h2>
 
         <div className="behavior-grid">
           <StaggerList className="behavior-stats">
+
+            {/* Taux de complétion — conservé */}
             {skipStats && (
-              <>
-                <StaggerItem>
-                  <StatCard
-                    title="Taux de complétion moyen"
-                    value={`${skipStats.avgListenPercent}%`}
-                    animatedValue={skipStats.avgListenPercent}
-                    animatedSuffix="%"
-                    subtitle="d'un titre écouté en moyenne"
-                    icon="🎯"
-                    accent="green"
-                  />
-                </StaggerItem>
-                <StaggerItem>
-                  <StatCard
-                    title="Titres abandonnés"
-                    value={skipStats.skippedPlays.toLocaleString("fr-FR")}
-                    animatedValue={skipStats.skippedPlays}
-                    subtitle={`${formatPercent(skipStats.skipRate)} de vos écoutes`}
-                    icon="⏭"
-                    accent="red"
-                  />
-                </StaggerItem>
-              </>
+              <StaggerItem>
+                <StatCard
+                  title="Taux de complétion moyen"
+                  value={`${skipStats.avgListenPercent}%`}
+                  animatedValue={skipStats.avgListenPercent}
+                  animatedSuffix="%"
+                  subtitle="d'un titre écouté en moyenne"
+                  icon="🎯"
+                  accent="green"
+                />
+              </StaggerItem>
             )}
+
             {behavior && (
               <>
                 <StaggerItem>
@@ -179,6 +180,7 @@ export function BehaviorPanel({ behavior, skipStats, streaks, discoveryTrends }:
                 </StaggerItem>
               </>
             )}
+
             {streaks && (
               <>
                 <StaggerItem>
